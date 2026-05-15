@@ -303,9 +303,11 @@ function drawBullets() {
     ctx.save();
     ctx.translate(b.x + BULLET_W / 2, b.y + BULLET_H / 2);
     ctx.rotate(angle);
-    ctx.fillStyle = powerUpTimer > 0 ? '#ff88ff' : '#ffff55';
+    const bColor = rapidFireTimer > 0 ? '#00ffff' : powerUpTimer > 0 ? '#ff88ff' : '#ffff55';
+    const bGlow  = rapidFireTimer > 0 ? 'rgba(0,220,255,0.25)' : powerUpTimer > 0 ? 'rgba(255,100,255,0.25)' : 'rgba(255,255,80,0.25)';
+    ctx.fillStyle = bColor;
     ctx.fillRect(-BULLET_W / 2, -BULLET_H / 2, BULLET_W, BULLET_H);
-    ctx.fillStyle = powerUpTimer > 0 ? 'rgba(255,100,255,0.25)' : 'rgba(255,255,80,0.25)';
+    ctx.fillStyle = bGlow;
     ctx.fillRect(-BULLET_W / 2 - 2, -BULLET_H / 2, BULLET_W + 4, BULLET_H + 4);
     ctx.restore();
   }
