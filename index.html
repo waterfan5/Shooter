@@ -336,11 +336,19 @@ function drawHUD() {
   ctx.fillText(`SCORE  ${score}`, 20, 31);
 
   ctx.textAlign = 'center';
-  if (powerUpTimer > 0) {
+  if (powerUpTimer > 0 || rapidFireTimer > 0) {
     const pulse = Math.floor(Date.now() / 220) % 2 === 0;
-    ctx.fillStyle = pulse ? '#ff88ff' : '#dd55dd';
     ctx.font = 'bold 15px monospace';
-    ctx.fillText(`TRIPLE SHOT  ${Math.ceil(powerUpTimer)}s`, W / 2, 31);
+    if (powerUpTimer > 0 && rapidFireTimer > 0) {
+      ctx.fillStyle = pulse ? '#00ffff' : '#ff88ff';
+      ctx.fillText(`TRIPLE+RAPID  ${Math.ceil(Math.max(powerUpTimer, rapidFireTimer))}s`, W / 2, 31);
+    } else if (powerUpTimer > 0) {
+      ctx.fillStyle = pulse ? '#ff88ff' : '#dd55dd';
+      ctx.fillText(`TRIPLE SHOT  ${Math.ceil(powerUpTimer)}s`, W / 2, 31);
+    } else {
+      ctx.fillStyle = pulse ? '#00ffff' : '#00aaaa';
+      ctx.fillText(`RAPID FIRE  ${Math.ceil(rapidFireTimer)}s`, W / 2, 31);
+    }
   } else {
     ctx.fillStyle = '#00ff88';
     ctx.font = 'bold 20px monospace';
