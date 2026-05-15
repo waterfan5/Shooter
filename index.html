@@ -156,7 +156,8 @@ function update(dt) {
           b.y < bonusShip.y + BONUS_H && b.y + BULLET_H > bonusShip.y) {
         explosions.push({ x: bonusShip.x + BONUS_W / 2, y: bonusShip.y + BONUS_H / 2, t: 0.55, maxT: 0.55, maxR: 38 });
         bonusShip = null;
-        powerUpTimer = POWERUP_DURATION;
+        if (Math.random() < 0.5) powerUpTimer = POWERUP_DURATION;
+        else rapidFireTimer = POWERUP_DURATION;
         b.dead = true;
         continue;
       }
