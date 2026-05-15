@@ -134,6 +134,7 @@ function update(dt) {
     player.x = Math.min(W - PLAYER_W, player.x + PLAYER_SPEED * dt);
 
   if (powerUpTimer > 0) powerUpTimer = Math.max(0, powerUpTimer - dt);
+  if (rapidFireTimer > 0) rapidFireTimer = Math.max(0, rapidFireTimer - dt);
 
   if (bonusShip) {
     bonusShip.x += bonusShip.dir * BONUS_SPEED * dt;
