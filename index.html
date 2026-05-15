@@ -220,8 +220,10 @@ function update(dt) {
 
 function drawPlayer() {
   const { x, y } = player;
-  const powered = powerUpTimer > 0;
-  ctx.fillStyle = powered ? '#ff88ff' : '#00ff88';
+  const triple = powerUpTimer > 0, rapid = rapidFireTimer > 0;
+  const color = rapid ? '#00ffff' : triple ? '#ff88ff' : '#00ff88';
+  const dark  = rapid ? '#00aaaa' : triple ? '#cc44cc' : '#00cc66';
+  ctx.fillStyle = color;
   ctx.beginPath();
   ctx.moveTo(x + PLAYER_W / 2, y);
   ctx.lineTo(x + PLAYER_W, y + PLAYER_H * 0.72);
@@ -230,10 +232,11 @@ function drawPlayer() {
   ctx.fill();
   ctx.fillRect(x, y + PLAYER_H * 0.56, PLAYER_W, PLAYER_H * 0.44);
   ctx.fillRect(x + PLAYER_W / 2 - 2, y - 8, 4, 10);
-  ctx.fillStyle = powered ? '#cc44cc' : '#00cc66';
+  ctx.fillStyle = dark;
   ctx.fillRect(x + PLAYER_W / 2 - 8, y + PLAYER_H * 0.6, 16, 6);
-  if (powered) {
-    ctx.strokeStyle = `rgba(255,100,255,${0.2 + 0.15 * Math.sin(Date.now() / 120)})`;
+  if (triple || rapid) {
+    const glowColor = rapid ? '0,220,255' : '255,100,255';
+    ctx.strokeStyle = `rgba(${glowColor},${0.2 + 0.15 * Math.sin(Date.now() / 120)})`;
     ctx.lineWidth = 4;
     ctx.strokeRect(x - 5, y - 12, PLAYER_W + 10, PLAYER_H + 16);
   }
