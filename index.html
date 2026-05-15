@@ -109,12 +109,13 @@ function fireBullet() {
   if (bullets.length > 0) return;
   const bx = player.x + PLAYER_W / 2 - BULLET_W / 2;
   const by = player.y - BULLET_H;
+  const spd = rapidFireTimer > 0 ? BULLET_SPEED * 3 : BULLET_SPEED;
   if (powerUpTimer > 0) {
-    bullets.push({ x: bx, y: by, vx: 0,                                   vy: -BULLET_SPEED });
-    bullets.push({ x: bx, y: by, vx: -BULLET_SPEED * Math.sin(POWERUP_ANGLE), vy: -BULLET_SPEED * Math.cos(POWERUP_ANGLE) });
-    bullets.push({ x: bx, y: by, vx:  BULLET_SPEED * Math.sin(POWERUP_ANGLE), vy: -BULLET_SPEED * Math.cos(POWERUP_ANGLE) });
+    bullets.push({ x: bx, y: by, vx: 0,                                vy: -spd });
+    bullets.push({ x: bx, y: by, vx: -spd * Math.sin(POWERUP_ANGLE), vy: -spd * Math.cos(POWERUP_ANGLE) });
+    bullets.push({ x: bx, y: by, vx:  spd * Math.sin(POWERUP_ANGLE), vy: -spd * Math.cos(POWERUP_ANGLE) });
   } else {
-    bullets.push({ x: bx, y: by, vx: 0, vy: -BULLET_SPEED });
+    bullets.push({ x: bx, y: by, vx: 0, vy: -spd });
   }
 }
 
