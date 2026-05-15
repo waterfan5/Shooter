@@ -2,6 +2,18 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Git workflow
+
+After every change to a source file, stage, commit, and push to GitHub:
+
+```
+git add <file>
+git commit -m "short description"
+git push
+```
+
+Always include `Co-Authored-By: Claude Sonnet 4.6 <noreply@anthropic.com>` in commit messages. The remote is `https://github.com/waterfan5/Shooter` (already configured as `origin`).
+
 ## Running the game
 
 Open `index.html` directly in a browser — no build step, no server, no dependencies.
@@ -15,7 +27,7 @@ After any edit, refresh the browser tab. There are no tests or linters configure
 
 ## Repository layout
 
-Everything lives in a single file: `index.html` (HTML + CSS + JS, ~450 lines). The GitHub remote is `https://github.com/waterfan5/Shooter`. Commit and push after every meaningful change.
+Everything lives in a single file: `index.html` (HTML + CSS + JS, ~450 lines).
 
 ## Architecture
 
