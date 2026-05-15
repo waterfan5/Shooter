@@ -38,12 +38,15 @@ const ALIEN_W = 36, ALIEN_H = 24;
 const GAP_X = 16, GAP_Y = 14;
 const COLS = 11, ROWS = 5;
 const DROP_STEP = 20;
-const BASE_SPEED = 35;
+const BASE_SPEED = 10;
 const SPEED_BOOST = 240;
+const BONUS_W = 56, BONUS_H = 22;
+const BONUS_SPEED = 55;
+const POWERUP_DURATION = 10;
+const POWERUP_ANGLE = 10 * Math.PI / 180;
 
 const ROW_SCORES = [30, 20, 20, 10, 10];
 
-// Static stars
 const STARS = Array.from({ length: 90 }, (_, i) => ({
   x: (i * 137 + 31) % W,
   y: HUD_H + (i * 211 + 73) % (H - HUD_H),
@@ -53,8 +56,9 @@ const STARS = Array.from({ length: 90 }, (_, i) => ({
 
 let state = 'start';
 let score = 0, level = 1;
-let player, bullet, aliens, explosions, killCount, totalAliens;
+let player, bullets, aliens, explosions, killCount, totalAliens;
 let alienDir, alienOffsetX, alienGroupY, baseAlienSpeed;
+let bonusShip = null, powerUpTimer = 0, nextBonusAt;
 let levelClearTimer = 0;
 
 const keys = {};
@@ -76,17 +80,20 @@ function handleSpace() {
 function startGame() {
   score = 0;
   level = 1;
+  powerUpTimer = 0;
   initLevel();
   state = 'playing';
 }
 
 function initLevel() {
   player = { x: W / 2 - PLAYER_W / 2, y: PLAYER_Y };
-  bullet = null;
+  bullets = [];
   explosions = [];
+  bonusShip = null;
   killCount = 0;
   totalAliens = COLS * ROWS;
-  baseAlienSpeed = BASE_SPEED + (level - 1) * 18;
+  nextBonusAt = 10;
+  baseAlienSpeed = BASE_SPEED + (level - 1) * 12;
   alienDir = 1;
   const gridW = COLS * ALIEN_W + (COLS - 1) * GAP_X;
   alienOffsetX = (W - gridW) / 2;
@@ -98,8 +105,21 @@ function initLevel() {
 }
 
 function fireBullet() {
-  if (bullet) return;
-  bullet = { x: player.x + PLAYER_W / 2 - BULLET_W / 2, y: player.y - BULLET_H };
+  if (bullets.length > 0) return;
+  const bx = player.x + PLAYER_W / 2 - BULLET_W / 2;
+  const by = player.y - BULLET_H;
+  if (powerUpTimer > 0) {
+    bullets.push({ x: bx, y: by, vx: 0,                                   vy: -BULLET_SPEED });
+    bullets.push({ x: bx, y: by, vx: -BULLET_SPEED * Math.sin(POWERUP_ANGLE), vy: -BULLET_SPEED * Math.cos(POWERUP_ANGLE) });
+    bullets.push({ x: bx, y: by, vx:  BULLET_SPEED * Math.sin(POWERUP_ANGLE), vy: -BULLET_SPEED * Math.cos(POWERUP_ANGLE) });
+  } else {
+    bullets.push({ x: bx, y: by, vx: 0, vy: -BULLET_SPEED });
+  }
+}
+
+function spawnBonusShip() {
+  const dir = Math.random() < 0.5 ? 1 : -1;
+  bonusShip = { x: dir === 1 ? -BONUS_W : W, y: HUD_H + 4, dir };
 }
 
 function alienX(col) { return alienOffsetX + col * (ALIEN_W + GAP_X); }
@@ -112,26 +132,55 @@ function update(dt) {
   if (keys['ArrowRight'] || keys['KeyD'])
     player.x = Math.min(W - PLAYER_W, player.x + PLAYER_SPEED * dt);
 
-  if (bullet) {
-    bullet.y -= BULLET_SPEED * dt;
-    if (bullet.y + BULLET_H < 0) {
-      bullet = null;
-    } else {
+  if (powerUpTimer > 0) powerUpTimer = Math.max(0, powerUpTimer - dt);
+
+  if (bonusShip) {
+    bonusShip.x += bonusShip.dir * BONUS_SPEED * dt;
+    if (bonusShip.dir === 1 && bonusShip.x > W) bonusShip = null;
+    if (bonusShip.dir === -1 && bonusShip.x + BONUS_W < 0) bonusShip = null;
+  }
+
+  for (const b of bullets) {
+    b.x += b.vx * dt;
+    b.y += b.vy * dt;
+
+    if (b.y + BULLET_H < 0 || b.y > H || b.x < -40 || b.x > W + 40) {
+      b.dead = true;
+      continue;
+    }
+
+    if (bonusShip && !b.dead) {
+      if (b.x < bonusShip.x + BONUS_W && b.x + BULLET_W > bonusShip.x &&
+          b.y < bonusShip.y + BONUS_H && b.y + BULLET_H > bonusShip.y) {
+        explosions.push({ x: bonusShip.x + BONUS_W / 2, y: bonusShip.y + BONUS_H / 2, t: 0.55, maxT: 0.55, maxR: 38 });
+        bonusShip = null;
+        powerUpTimer = POWERUP_DURATION;
+        b.dead = true;
+        continue;
+      }
+    }
+
+    if (!b.dead) {
       for (const a of aliens) {
         if (!a.alive) continue;
         const ax = alienX(a.col), ay = alienY(a.row);
-        if (bullet.x < ax + ALIEN_W && bullet.x + BULLET_W > ax &&
-            bullet.y < ay + ALIEN_H && bullet.y + BULLET_H > ay) {
+        if (b.x < ax + ALIEN_W && b.x + BULLET_W > ax &&
+            b.y < ay + ALIEN_H && b.y + BULLET_H > ay) {
           a.alive = false;
           score += a.pts;
           killCount++;
-          explosions.push({ x: ax + ALIEN_W / 2, y: ay + ALIEN_H / 2, t: 0.35 });
-          bullet = null;
+          explosions.push({ x: ax + ALIEN_W / 2, y: ay + ALIEN_H / 2, t: 0.35, maxT: 0.35, maxR: 22 });
+          b.dead = true;
+          if (killCount === nextBonusAt) {
+            if (!bonusShip) spawnBonusShip();
+            nextBonusAt += 10;
+          }
           break;
         }
       }
     }
   }
+  bullets = bullets.filter(b => !b.dead);
 
   if (killCount === totalAliens) {
     state = 'levelClear';
@@ -150,7 +199,6 @@ function update(dt) {
   alienOffsetX += effectiveSpeed() * dt * alienDir;
   const leftEdge = alienX(minCol);
   const rightEdge = alienX(maxCol) + ALIEN_W;
-
   if (alienDir === 1 && rightEdge >= W) {
     alienOffsetX -= rightEdge - W;
     alienDir = -1;
@@ -161,16 +209,15 @@ function update(dt) {
     alienGroupY += DROP_STEP;
   }
 
-  if (alienY(maxRow) + ALIEN_H >= PLAYER_Y) {
-    state = 'gameOver';
-  }
+  if (alienY(maxRow) + ALIEN_H >= PLAYER_Y) state = 'gameOver';
 }
 
 // ── Drawing ──────────────────────────────────────────────────────────────────
 
 function drawPlayer() {
   const { x, y } = player;
-  ctx.fillStyle = '#00ff88';
+  const powered = powerUpTimer > 0;
+  ctx.fillStyle = powered ? '#ff88ff' : '#00ff88';
   ctx.beginPath();
   ctx.moveTo(x + PLAYER_W / 2, y);
   ctx.lineTo(x + PLAYER_W, y + PLAYER_H * 0.72);
@@ -179,8 +226,13 @@ function drawPlayer() {
   ctx.fill();
   ctx.fillRect(x, y + PLAYER_H * 0.56, PLAYER_W, PLAYER_H * 0.44);
   ctx.fillRect(x + PLAYER_W / 2 - 2, y - 8, 4, 10);
-  ctx.fillStyle = '#00cc66';
+  ctx.fillStyle = powered ? '#cc44cc' : '#00cc66';
   ctx.fillRect(x + PLAYER_W / 2 - 8, y + PLAYER_H * 0.6, 16, 6);
+  if (powered) {
+    ctx.strokeStyle = `rgba(255,100,255,${0.2 + 0.15 * Math.sin(Date.now() / 120)})`;
+    ctx.lineWidth = 4;
+    ctx.strokeRect(x - 5, y - 12, PLAYER_W + 10, PLAYER_H + 16);
+  }
 }
 
 function drawAlien(col, row) {
@@ -188,108 +240,112 @@ function drawAlien(col, row) {
   const cx = ax + ALIEN_W / 2, cy = ay + ALIEN_H / 2;
   ctx.save();
   ctx.translate(cx, cy);
-
   if (row === 0) {
-    // UFO saucer
     ctx.fillStyle = '#ff4444';
-    ctx.beginPath();
-    ctx.ellipse(0, 5, 17, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, 5, 17, 8, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#ff8888';
-    ctx.beginPath();
-    ctx.ellipse(0, -1, 11, 8, 0, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -1, 11, 8, 0, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = '#ff3333';
-    ctx.fillRect(-5, -3, 3, 3);
-    ctx.fillRect(2, -3, 3, 3);
-    // Bottom lights
+    ctx.fillRect(-5, -3, 3, 3); ctx.fillRect(2, -3, 3, 3);
     ctx.fillStyle = '#ffaaaa';
-    ctx.fillRect(-8, 7, 3, 3);
-    ctx.fillRect(-1, 8, 3, 3);
-    ctx.fillRect(6, 7, 3, 3);
+    ctx.fillRect(-8, 7, 3, 3); ctx.fillRect(-1, 8, 3, 3); ctx.fillRect(6, 7, 3, 3);
   } else if (row <= 2) {
-    // Crab
     ctx.fillStyle = '#ffaa00';
     ctx.fillRect(-11, -9, 22, 18);
-    ctx.fillRect(-17, -7, 8, 5);
-    ctx.fillRect(-17, 2, 6, 5);
-    ctx.fillRect(9, -7, 8, 5);
-    ctx.fillRect(11, 2, 6, 5);
-    ctx.fillRect(-9, -14, 3, 7);
-    ctx.fillRect(6, -14, 3, 7);
+    ctx.fillRect(-17, -7, 8, 5); ctx.fillRect(-17, 2, 6, 5);
+    ctx.fillRect(9, -7, 8, 5);  ctx.fillRect(11, 2, 6, 5);
+    ctx.fillRect(-9, -14, 3, 7); ctx.fillRect(6, -14, 3, 7);
     ctx.fillStyle = '#000';
-    ctx.fillRect(-7, -5, 4, 5);
-    ctx.fillRect(3, -5, 4, 5);
+    ctx.fillRect(-7, -5, 4, 5); ctx.fillRect(3, -5, 4, 5);
     ctx.fillStyle = '#ffdd88';
-    ctx.fillRect(-6, -4, 2, 3);
-    ctx.fillRect(4, -4, 2, 3);
+    ctx.fillRect(-6, -4, 2, 3); ctx.fillRect(4, -4, 2, 3);
   } else {
-    // Squid
     ctx.fillStyle = '#44aaff';
-    ctx.fillRect(-9, -12, 18, 10);
-    ctx.fillRect(-11, -4, 22, 14);
-    ctx.fillRect(-11, 8, 4, 7);
-    ctx.fillRect(-4, 8, 4, 9);
-    ctx.fillRect(3, 8, 4, 9);
-    ctx.fillRect(10, 8, 4, 7);
-    ctx.fillRect(-8, -16, 5, 6);
-    ctx.fillRect(3, -16, 5, 6);
+    ctx.fillRect(-9, -12, 18, 10); ctx.fillRect(-11, -4, 22, 14);
+    ctx.fillRect(-11, 8, 4, 7); ctx.fillRect(-4, 8, 4, 9);
+    ctx.fillRect(3, 8, 4, 9);  ctx.fillRect(10, 8, 4, 7);
+    ctx.fillRect(-8, -16, 5, 6); ctx.fillRect(3, -16, 5, 6);
     ctx.fillStyle = '#000';
-    ctx.fillRect(-7, -9, 5, 5);
-    ctx.fillRect(2, -9, 5, 5);
+    ctx.fillRect(-7, -9, 5, 5); ctx.fillRect(2, -9, 5, 5);
     ctx.fillStyle = '#88ccff';
-    ctx.fillRect(-6, -8, 3, 3);
-    ctx.fillRect(3, -8, 3, 3);
+    ctx.fillRect(-6, -8, 3, 3); ctx.fillRect(3, -8, 3, 3);
   }
-
   ctx.restore();
+}
+
+function drawBonusShip() {
+  if (!bonusShip) return;
+  const cx = bonusShip.x + BONUS_W / 2, cy = bonusShip.y + BONUS_H / 2;
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.shadowColor = '#cc44ff';
+  ctx.shadowBlur = 14;
+  ctx.fillStyle = '#cc44ff';
+  ctx.beginPath(); ctx.ellipse(0, 4, BONUS_W / 2, BONUS_H / 2, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ee88ff';
+  ctx.beginPath(); ctx.ellipse(0, -2, BONUS_W / 2 - 12, BONUS_H / 2 - 4, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffaaff';
+  for (let lx = -18; lx <= 18; lx += 9) ctx.fillRect(lx - 2, 6, 5, 4);
+  ctx.restore();
+}
+
+function drawBullets() {
+  for (const b of bullets) {
+    const angle = Math.atan2(b.vx, -b.vy);
+    ctx.save();
+    ctx.translate(b.x + BULLET_W / 2, b.y + BULLET_H / 2);
+    ctx.rotate(angle);
+    ctx.fillStyle = powerUpTimer > 0 ? '#ff88ff' : '#ffff55';
+    ctx.fillRect(-BULLET_W / 2, -BULLET_H / 2, BULLET_W, BULLET_H);
+    ctx.fillStyle = powerUpTimer > 0 ? 'rgba(255,100,255,0.25)' : 'rgba(255,255,80,0.25)';
+    ctx.fillRect(-BULLET_W / 2 - 2, -BULLET_H / 2, BULLET_W + 4, BULLET_H + 4);
+    ctx.restore();
+  }
 }
 
 function drawExplosions() {
   for (const e of explosions) {
-    const progress = 1 - e.t / 0.35;
-    const alpha = e.t / 0.35;
-    const r = 2 + progress * 24;
+    const progress = 1 - e.t / e.maxT;
+    const alpha = e.t / e.maxT;
+    const r = 2 + progress * e.maxR;
     ctx.strokeStyle = `rgba(255,180,40,${alpha})`;
     ctx.lineWidth = 2.5;
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, r, 0, Math.PI * 2);
-    ctx.stroke();
-    ctx.fillStyle = `rgba(255,240,180,${alpha * 0.45})`;
-    ctx.beginPath();
-    ctx.arc(e.x, e.y, r * 0.5, 0, Math.PI * 2);
-    ctx.fill();
+    ctx.beginPath(); ctx.arc(e.x, e.y, r, 0, Math.PI * 2); ctx.stroke();
+    ctx.fillStyle = `rgba(255,240,180,${alpha * 0.4})`;
+    ctx.beginPath(); ctx.arc(e.x, e.y, r * 0.5, 0, Math.PI * 2); ctx.fill();
   }
 }
 
-function drawBullet() {
-  if (!bullet) return;
-  ctx.fillStyle = '#ffff55';
-  ctx.fillRect(bullet.x, bullet.y, BULLET_W, BULLET_H);
-  ctx.fillStyle = 'rgba(255,255,80,0.2)';
-  ctx.fillRect(bullet.x - 2, bullet.y, BULLET_W + 4, BULLET_H + 4);
-}
-
 function drawHUD() {
-  ctx.fillStyle = 'rgba(0,0,10,0.85)';
+  ctx.fillStyle = 'rgba(0,0,10,0.88)';
   ctx.fillRect(0, 0, W, HUD_H);
+
   ctx.fillStyle = '#00ff88';
   ctx.font = 'bold 20px monospace';
   ctx.textAlign = 'left';
   ctx.fillText(`SCORE  ${score}`, 20, 31);
+
   ctx.textAlign = 'center';
-  ctx.fillText(`LEVEL  ${level}`, W / 2, 31);
+  if (powerUpTimer > 0) {
+    const pulse = Math.floor(Date.now() / 220) % 2 === 0;
+    ctx.fillStyle = pulse ? '#ff88ff' : '#dd55dd';
+    ctx.font = 'bold 15px monospace';
+    ctx.fillText(`TRIPLE SHOT  ${Math.ceil(powerUpTimer)}s`, W / 2, 31);
+  } else {
+    ctx.fillStyle = '#00ff88';
+    ctx.font = 'bold 20px monospace';
+    ctx.fillText(`LEVEL  ${level}`, W / 2, 31);
+  }
+
   ctx.fillStyle = '#888';
   ctx.font = '14px monospace';
   ctx.textAlign = 'right';
-  const alive = totalAliens - killCount;
-  ctx.fillText(`ALIENS: ${alive}`, W - 20, 31);
+  ctx.fillText(`ALIENS: ${totalAliens - killCount}`, W - 20, 31);
+
   ctx.strokeStyle = '#00ff8822';
   ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, HUD_H - 1);
-  ctx.lineTo(W, HUD_H - 1);
-  ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0, HUD_H - 1); ctx.lineTo(W, HUD_H - 1); ctx.stroke();
 }
 
 function blink() { return Math.floor(Date.now() / 500) % 2 === 0; }
@@ -313,12 +369,12 @@ function draw() {
     ctx.fillStyle = '#aaa';
     ctx.fillText('← →  or  A D   to move', W / 2, H / 2 - 14);
     ctx.fillText('SPACE to fire', W / 2, H / 2 + 18);
-    ctx.fillStyle = '#ffaa00';
-    ctx.fillText('Destroy all aliens to advance levels!', W / 2, H / 2 + 62);
+    ctx.fillStyle = '#cc44ff';
+    ctx.fillText('Hit the bonus saucer for TRIPLE SHOT!', W / 2, H / 2 + 60);
     if (blink()) {
       ctx.fillStyle = '#00ff88';
       ctx.font = 'bold 22px monospace';
-      ctx.fillText('PRESS SPACE TO PLAY', W / 2, H / 2 + 124);
+      ctx.fillText('PRESS SPACE TO PLAY', W / 2, H / 2 + 120);
     }
     ctx.textAlign = 'left';
     return;
@@ -343,12 +399,12 @@ function draw() {
     return;
   }
 
-  for (const a of aliens)
-    if (a.alive) drawAlien(a.col, a.row);
+  for (const a of aliens) if (a.alive) drawAlien(a.col, a.row);
 
+  drawBonusShip();
   drawExplosions();
   drawPlayer();
-  drawBullet();
+  drawBullets();
 
   ctx.strokeStyle = '#00ff8833';
   ctx.lineWidth = 1;
@@ -381,15 +437,11 @@ function loop(timestamp) {
   const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
   lastTime = timestamp;
 
-  explosions = explosions ? explosions.filter(e => { e.t -= dt; return e.t > 0; }) : [];
+  if (explosions) explosions = explosions.filter(e => { e.t -= dt; return e.t > 0; });
 
   if (state === 'levelClear') {
     levelClearTimer -= dt;
-    if (levelClearTimer <= 0) {
-      level++;
-      initLevel();
-      state = 'playing';
-    }
+    if (levelClearTimer <= 0) { level++; initLevel(); state = 'playing'; }
   } else if (state === 'playing') {
     update(dt);
   }
